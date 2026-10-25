@@ -1,6 +1,6 @@
 # Extracting New Product Announcements from SEC 8-K Filings with a Local LLM
 
-**GitHub:** https://github.com/<your-username>/sec-8k-product-extraction
+**GitHub:** https://github.com/kraydia/Krainova_D
 
 ## 1. Goal and output
 
