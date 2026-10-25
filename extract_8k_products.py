@@ -112,10 +112,13 @@ def http_get(url, headers=None, use_cache=True):
     """Return the body of `url` as text, using a disk cache and a rate limit."""
     global _last_request
     CACHE_DIR.mkdir(exist_ok=True)
+    # Each URL is saved under a file named after its hash, so a second run
+    # reads documents from disk instead of downloading them again.
     cache_file = CACHE_DIR / (hashlib.sha1(url.encode()).hexdigest() + ".cache")
     if use_cache and cache_file.exists():
         return cache_file.read_text(encoding="utf-8", errors="ignore")
 
+    # Wait if the previous request was too recent (SEC allows 10 per second).
     wait = SEC_MIN_INTERVAL - (time.time() - _last_request)
     if wait > 0:
         time.sleep(wait)
@@ -167,9 +170,11 @@ def load_ticker_map():
 
 def list_8k_filings(cik, count):
     """Parse the EDGAR Atom feed into a list of filing dicts (newest first)."""
+    # Not cached: the feed changes whenever the company files something new.
     xml = http_get(FEED_URL.format(cik=cik, count=count), use_cache=False)
     soup = BeautifulSoup(xml, "html.parser")   # tolerant of EDGAR's XML
     filings = []
+    # Every <entry> in the feed is one filing; copy out the fields we need.
     for entry in soup.find_all("entry"):
         def field(tag):
             node = entry.find(tag)
@@ -192,6 +197,7 @@ def get_filing_documents(index_url):
     docs = []
     if table is None:
         return docs
+    # Table columns: Seq | Description | Document (link) | Type | Size
     for row in table.find_all("tr")[1:]:
         cells = row.find_all("td")
         if len(cells) < 4 or not cells[2].find("a"):
@@ -218,6 +224,8 @@ def html_to_text(html):
 def fetch_filing_text(filing):
     """Download the press-release exhibits (EX-99.x); fall back to the 8-K body."""
     docs = get_filing_documents(filing["index_url"])
+    # Press releases are attached as Exhibit 99.1, 99.2, ...; the 8-K form
+    # itself is mostly legal boilerplate, so it is only used as a fallback.
     exhibits = [url for typ, url in docs if typ.startswith("EX-99")]
     chosen = exhibits or [url for typ, url in docs if typ.startswith("8-K")][:1]
     text = " ".join(html_to_text(http_get(url)) for url in chosen)
@@ -234,13 +242,15 @@ def select_launch_passages(text, budget=MAX_PROMPT_CHARS):
     neighbours. The headline (first ~600 chars) is always kept because press
     releases put the announcement there.
     """
+    # Rough sentence split: break after . ! or ? followed by a space.
     sentences = re.split(r"(?<=[.!?])\s+", text)
     keep = set()
     for i, sentence in enumerate(sentences):
         if LAUNCH_KEYWORDS.search(sentence):
+            # The sentence before / after often names or describes the product.
             keep.update({i - 1, i, i + 1})
     if not keep:
-        return ""
+        return ""          # no launch words at all -> skip the LLM call
     selected = [sentences[i] for i in sorted(keep) if 0 <= i < len(sentences)]
     passage = text[:600] + " ... " + " ".join(selected)
     return passage[:budget]
@@ -272,6 +282,8 @@ def run_ner(text):
     nlp = load_ner_model()
     if not nlp:
         return [], []
+    # Count how often each ORG / PRODUCT name appears; the most frequent ones
+    # are passed to the LLM as hints.
     counts = {"ORG": {}, "PRODUCT": {}}
     for ent in nlp(text).ents:
         if ent.label_ in counts:
@@ -366,6 +378,10 @@ def query_llm(model, user_prompt):
         return {}, time.time() - start
 
 
+# Note: I also tried adding COMPANY and THIRD_PARTY categories here to catch
+# acquired companies and other firms' products. llama3.2 (3B) then labelled
+# many of the companies' own products as THIRD_PARTY, so those categories were
+# removed; such cases are handled in manual_exclusions.csv instead.
 VERIFY_PROMPT = """You check candidate products extracted from an SEC 8-K filing.
 
 Company: {company}
@@ -453,6 +469,7 @@ def pretty_company(name):
 
 
 def normalise(s):
+    """Lower-case and keep only letters/digits, so 'Libre® 3' == 'libre 3'."""
     return re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
 
 
@@ -498,19 +515,27 @@ def validate_products(llm_json, source_text):
             continue
         name = strip_symbols(str(item.get("new_product", "")), source_text)
         key = normalise(name)
+
+        # Check 1: skip empty/generic names, repeats and run-on sentences.
         if key in generic or key in seen or len(name) > 80:
             continue
+        # Check 2: skip names that are really deals, securities, etc.
         if NOT_PRODUCT_WORDS.search(key):
             continue
+        # Check 3: the product name has to appear in the filing (catches
+        # names the model made up).
         if key not in haystack and word_coverage(name, haystack) < 0.75:
             continue
 
+        # Check 4: the quoted evidence must come from the filing, mention the
+        # product, and use a launch word ("launched", "approved", ...).
         evidence = str(item.get("evidence", ""))
         if (word_coverage(evidence, haystack) < 0.8
                 or word_coverage(name, normalise(evidence)) < 0.5
                 or not LAUNCH_KEYWORDS.search(evidence)):
             continue
 
+        # Check 5: the description must add something beyond the name.
         description = clean_description(
             strip_symbols(str(item.get("product_description", "")), source_text))
         if len(description) < 15 or normalise(description) in (key, "the " + key):
@@ -580,6 +605,28 @@ def parse_args():
     return p.parse_args()
 
 
+def apply_manual_exclusions(out_csv):
+    """
+    Remove rows listed in manual_exclusions.csv (stock_name, new_product,
+    reason). These are errors found by reading the final CSV by hand that both
+    LLM passes missed. Keeping them in a file makes every manual change
+    visible and repeatable instead of editing the CSV directly.
+    """
+    exclusions_file = BASE_DIR / "manual_exclusions.csv"
+    if not exclusions_file.exists() or not out_csv.exists():
+        return 0
+    excluded = {(r["stock_name"], normalise(r["new_product"]))
+                for r in read_csv(exclusions_file)}
+    rows = read_csv(out_csv)
+    kept = [r for r in rows
+            if (r["stock_name"], normalise(r["new_product"])) not in excluded]
+    if len(kept) != len(rows):
+        out_csv.unlink()
+        for row in kept:
+            append_csv(out_csv, CSV_COLUMNS, row)
+    return len(rows) - len(kept)
+
+
 def check_candidate(model, company, product):
     """verify_product with one retry; an Ollama error counts as a rejection."""
     for attempt in range(2):
@@ -636,6 +683,7 @@ def main():
     print(f"{len(tickers)} companies, model={args.model}, "
           f"{n_rows} rows already saved, {len(done)} filings already seen")
 
+    # Outer loop: one company at a time, until we have enough products.
     for ticker in tickers:
         if n_rows >= args.target_rows:
             break
@@ -651,10 +699,13 @@ def main():
             print(f"[{ticker}] feed error: {exc}")
             continue
 
+        # Inner loop: this company's 8-Ks, newest first. Every filing gets a
+        # row in processing_log.csv saying what happened to it.
         sent_to_llm = 0
         for filing in filings:
             if sent_to_llm >= args.max_docs_per_company or n_rows >= args.target_rows:
                 break
+            # Skip filings done in an earlier run, and amendments (8-K/A).
             if filing["accession"] in done or filing["form"] != "8-K":
                 continue
             log = {"ticker": ticker, "company_name": company,
@@ -664,6 +715,7 @@ def main():
                    "n_products": 0, "ner_orgs": "", "ner_products": "",
                    "llm_seconds": ""}
 
+            # Filter 1 (free): only 8-Ks that usually contain a press release.
             if not any(item in filing["items"] for item in RELEVANT_ITEMS):
                 log["status"] = "skipped_items"
                 append_csv(log_csv, LOG_COLUMNS, log)
@@ -676,12 +728,14 @@ def main():
                 append_csv(log_csv, LOG_COLUMNS, log)
                 continue
 
+            # Filter 2 (free): the text must contain at least one launch word.
             passage = select_launch_passages(text)
             if not passage:
                 log["status"] = "no_launch_keywords"
                 append_csv(log_csv, LOG_COLUMNS, log)
                 continue
 
+            # NER hints, then the main LLM call (stage 1: extraction).
             orgs, ner_products = run_ner(passage)
             log["ner_orgs"] = "; ".join(orgs)
             log["ner_products"] = "; ".join(ner_products)
@@ -705,8 +759,11 @@ def main():
             sent_to_llm += 1
             log["llm_seconds"] = f"{seconds:.1f}"
 
+            # Rule checks on the answer, and drop products we already have.
             candidates = [p for p in validate_products(answer, text)
                           if (company, normalise(p["new_product"])) not in reported]
+            # Stage 2: a short second LLM call classifies each candidate;
+            # anything that is not a PRODUCT goes to rejected_candidates.csv.
             products = []
             for product in candidates:
                 ok, reason = check_candidate(args.model, company, product)
@@ -723,6 +780,8 @@ def main():
             log["status"] = "product_found" if products else "no_product"
             append_csv(log_csv, LOG_COLUMNS, log)
 
+            # Save the accepted products right away, so nothing is lost if the
+            # run is stopped.
             for product in products:
                 append_csv(out_csv, CSV_COLUMNS, {
                     "company_name": company,
@@ -736,9 +795,14 @@ def main():
             print(f"[{ticker}] {filing['filing_date']} items={filing['items']!r} "
                   f"{seconds:.0f}s -> {names}   (total rows {n_rows})", flush=True)
 
+    # Last step: drop the rows flagged during manual review, then write the
+    # " | " separated version of the table.
+    removed = apply_manual_exclusions(out_csv)
+    if removed:
+        print(f"Removed {removed} rows listed in manual_exclusions.csv")
     if out_csv.exists():
         write_pipe_table(out_csv, OUTPUT_DIR / "new_products.txt")
-    print(f"Done: {n_rows} product rows in {out_csv}")
+    print(f"Done: {len(read_csv(out_csv))} product rows in {out_csv}")
 
 
 if __name__ == "__main__":

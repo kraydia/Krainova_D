@@ -1,0 +1,26 @@
+stock_name,new_product,reason
+DELL,DeepSeek,"Another company's AI model, mentioned in passing"
+ECL,CoolIT Systems,Company acquired by Ecolab (deal not product)
+FDX,FedEx Freight,Business being spun off (not a product launch)
+INTC,Intel vPro,Existing product family
+INTC,C4,Google Cloud instance type that uses Intel chips (third-party product)
+YUM,KFC,Restaurant brand being refreshed (not a new product)
+CTSH,Travelport,Company/platform being acquired (deal)
+IR,Fox s.r.l.,Company acquired by Ingersoll Rand (deal)
+GDDY,MuleSoft,Salesforce product used in an integration (third-party)
+NOW,Zaelab,Consulting firm acquired by ServiceNow (deal)
+NOW,Microsoft Agent 365,Microsoft product in a partnership (third-party)
+BA,F/A-18,Repair contract for an existing aircraft
+FE,Siemens H / HL technology combined cycle gas turbine (CCGT),Equipment bought from Siemens for a power plant
+F,Explorer Tremor,Mentioned only in sales results
+EFX,New Product Innovation leveraging new EFX Cloud and EFX.AI,Sales metric (Vitality Index) not a product
+EFX,EFX Cloud,Existing platform mentioned with a sales metric
+CDNS,Cadence.ai,Existing portfolio mentioned as gaining momentum
+PTC,Cognite,Company being acquired by Schneider Electric (deal)
+VTRS,EXPAREL,Existing medicine gained through an acquisition
+WMB,Socrates,Power generation project (facility)
+AMD,Discovery,Customer supercomputer built with AMD chips (not an AMD product)
+AMD,AMD Instinct GPUs,Existing product family mentioned in a customer deal
+ALGN,Invisalign System,Existing product
+ANET,CloudVision,Existing product
+HOOD,Robinhood Legend,Launched about 18 months before this filing
