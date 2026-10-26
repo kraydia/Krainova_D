@@ -6,7 +6,9 @@
 
 The goal was to read SEC Form 8-K filings, find new product announcements,
 and save them in a CSV with five columns: company name, ticker, filing date,
-product name and a short description (under 180 characters). My final file,
+product name and a short description (under 180 characters). For "Filing
+Time" I used the SEC filing date (YYYY-MM-DD), the same format as the example
+in the assignment, rather than the exact time of day. My final file,
 `output/new_products.csv`, has **196 products from 84 S&P 500 companies**.
 To get there, the program looked at **4,930 8-K filings from 495 companies**,
 filed between November 2023 and October 2026.
@@ -110,7 +112,8 @@ example a newly approved use for an existing drug.
 - I could only measure how many results were wrong, not how many launches
   were missed. There is no answer key, and launches described without any
   launch word are skipped.
-- `filing_time` is the filing date, not the exact time.
+- `filing_time` is the filing date, not the exact time. The EDGAR feed also
+  has a full timestamp, so the script could save that instead if needed.
 
 ## Files
 
