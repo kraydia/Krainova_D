@@ -8,7 +8,7 @@ candidates it classifies as products (not deals, programs or facilities).
 
 Result: **188 new products from 82 companies**, from 4,930 filings examined
 (33 rows removed by manual review are listed in `manual_exclusions.csv`;
-weak descriptions were rewritten with `tools/fix_descriptions.py`).
+42 weak descriptions were rewritten with a follow-up LLM prompt).
 See [report.md](report.md) for the methodology.
 
 ## Output
@@ -19,9 +19,7 @@ See [report.md](report.md) for the methodology.
 | `output/new_products.txt` | the same table, values separated by ` \| ` |
 | `output/processing_log.csv` | every filing examined, its status, NER entities and LLM time |
 | `output/rejected_candidates.csv` | candidates dropped by the verification pass, with the model's reason |
-| `manual_exclusions.csv` | rows removed on manual review, with reasons (applied automatically) |
-| `tools/` | one-off helpers used to re-verify, clean and re-describe the saved rows |
-| `report.md` | methodology report |
+| `manual_exclusions.csv` | rows removed on manual review, with reasons (applied automatically) || `report.md` | methodology report |
 
 ## Run it
 

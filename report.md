@@ -87,8 +87,8 @@ example a newly approved use for an existing drug.
 
 **Fixing weak descriptions:** 42 descriptions were too short (like "a new
 MacBook model"), talked about sales instead of the product, or were the same
-for two products. `tools/fix_descriptions.py` sends the filing sentences that
-mention each of these products back to the LLM and asks for a better
+for two products. I sent the filing sentences that mention each of these
+products back to the LLM with a short prompt asking for a better
 description. I read every rewrite and kept the old text for 6 where the new
 one wasn't better. One description (the Ensure shake) I wrote by hand, because
 the filing lists several launches in one long sentence and the model kept
@@ -134,4 +134,4 @@ leftover "TM" marks from product names.
 `output/new_products.txt` (same table with `|`), `output/processing_log.csv`
 (every filing and what happened to it), `output/rejected_candidates.csv`
 (products the LLM check removed), `manual_exclusions.csv` (rows I removed by
-hand), `tools/` (helper scripts) and `README.md` (how to run it).
+hand) and `README.md` (how to run it).
