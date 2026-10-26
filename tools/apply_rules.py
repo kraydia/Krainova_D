@@ -1,5 +1,5 @@
 """
-One-off helper: apply the name rules and company-level de-duplication that
+one-off helper: apply the name rules and company-level de-duplication that
 were added to extract_8k_products.py last to the rows already saved, then
 rewrite output/new_products.txt.
 """

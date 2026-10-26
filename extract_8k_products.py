@@ -2,9 +2,9 @@
 extract_8k_products.py
 ======================
 
-Extract new product announcements from SEC Form 8-K filings with a local LLM.
+extract new product announcements from SEC Form 8-K filings with a local LLM.
 
-Pipeline (one pass per S&P 500 company):
+pipeline (one pass per S&P 500 company):
     1. Map ticker -> CIK with https://www.sec.gov/files/company_tickers.json
     2. List recent 8-K filings with the EDGAR Atom feed
        (browse-edgar?action=getcompany&CIK=...&type=8-K&output=atom)
@@ -20,19 +20,19 @@ Pipeline (one pass per S&P 500 company):
     8. Second LLM pass: classify each candidate as PRODUCT / DEAL / PROGRAM /
        FACILITY / OTHER and keep only PRODUCT rows in the output CSV
 
-Outputs:
+outputs:
     output/new_products.csv     company_name, stock_name, filing_time,
                                 new_product, product_description
     output/new_products.txt     the same table, values separated by " | "
     output/processing_log.csv   every filing looked at, with status/timing
     output/rejected_candidates.csv  candidates dropped by the second pass
 
-Usage:
+usage:
     set SEC_USER_AGENT=Your Name your.email@example.com
     ollama pull llama3.2
     python extract_8k_products.py --target-rows 100
 
-The run can be stopped and restarted: filings already in the log are skipped.
+the run can be stopped and restarted: filings already in the log are skipped.
 """
 
 import argparse
@@ -49,14 +49,14 @@ from pathlib import Path
 import requests
 from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
 
-# The EDGAR Atom feed is XML; html.parser reads it fine without needing lxml.
+# the EDGAR Atom feed is XML; html.parser reads it fine without needing lxml.
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 # ---------------------------------------------------------------------------
-# Configuration
+# configuration
 # ---------------------------------------------------------------------------
 
-# The SEC asks every automated client to identify itself with a contact
+# the SEC asks every automated client to identify itself with a contact
 # address (https://www.sec.gov/os/accessing-edgar-data). Set SEC_USER_AGENT.
 SEC_USER_AGENT = os.environ.get(
     "SEC_USER_AGENT", "8K-Product-Extractor student-project contact@example.com"
@@ -77,7 +77,7 @@ DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.2")
 # releases (Item 2.02) often mention products launched during the quarter.
 RELEVANT_ITEMS = ("7.01", "8.01", "2.02")
 
-# Words that signal a product announcement; used to pick passages for the LLM.
+# words that signal a product announcement; used to pick passages for the LLM.
 LAUNCH_KEYWORDS = re.compile(
     r"\b(launch\w*|introduc\w*|unveil\w*|debut\w*|announc\w*|"
     r"new (?:product|platform|service|solution|model|device|drug|therapy|version)\w*|"
@@ -109,16 +109,16 @@ _last_request = 0.0
 
 
 def http_get(url, headers=None, use_cache=True):
-    """Return the body of `url` as text, using a disk cache and a rate limit."""
+    """return the body of `url` as text, using a disk cache and a rate limit."""
     global _last_request
     CACHE_DIR.mkdir(exist_ok=True)
-    # Each URL is saved under a file named after its hash, so a second run
+    # each URL is saved under a file named after its hash, so a second run
     # reads documents from disk instead of downloading them again.
     cache_file = CACHE_DIR / (hashlib.sha1(url.encode()).hexdigest() + ".cache")
     if use_cache and cache_file.exists():
         return cache_file.read_text(encoding="utf-8", errors="ignore")
 
-    # Wait if the previous request was too recent (SEC allows 10 per second).
+    # wait if the previous request was too recent (SEC allows 10 per second).
     wait = SEC_MIN_INTERVAL - (time.time() - _last_request)
     if wait > 0:
         time.sleep(wait)
@@ -138,11 +138,11 @@ def http_get(url, headers=None, use_cache=True):
 
 
 # ---------------------------------------------------------------------------
-# Step 1: company universe (S&P 500) and ticker -> CIK mapping
+# step 1: company universe (S&P 500) and ticker -> CIK mapping
 # ---------------------------------------------------------------------------
 
 def load_sp500_tickers():
-    """Scrape the S&P 500 constituent tickers from Wikipedia."""
+    """scrape the S&P 500 constituent tickers from Wikipedia."""
     html = http_get(SP500_URL, headers={"User-Agent": SEC_USER_AGENT})
     soup = BeautifulSoup(html, "html.parser")
     table = soup.find("table", {"id": "constituents"})
@@ -156,7 +156,7 @@ def load_sp500_tickers():
 
 
 def load_ticker_map():
-    """Return {ticker: (cik_10_digits, company_title)} from the SEC file."""
+    """return {ticker: (cik_10_digits, company_title)} from the SEC file."""
     data = json.loads(http_get(TICKERS_URL))
     return {
         row["ticker"].upper(): (str(row["cik_str"]).zfill(10), row["title"])
@@ -165,16 +165,16 @@ def load_ticker_map():
 
 
 # ---------------------------------------------------------------------------
-# Step 2-3: list 8-K filings and download their text
+# step 2-3: list 8-K filings and download their text
 # ---------------------------------------------------------------------------
 
 def list_8k_filings(cik, count):
-    """Parse the EDGAR Atom feed into a list of filing dicts (newest first)."""
-    # Not cached: the feed changes whenever the company files something new.
+    """parse the EDGAR Atom feed into a list of filing dicts (newest first)."""
+    # not cached: the feed changes whenever the company files something new.
     xml = http_get(FEED_URL.format(cik=cik, count=count), use_cache=False)
     soup = BeautifulSoup(xml, "html.parser")   # tolerant of EDGAR's XML
     filings = []
-    # Every <entry> in the feed is one filing; copy out the fields we need.
+    # every <entry> in the feed is one filing; copy out the fields we need.
     for entry in soup.find_all("entry"):
         def field(tag):
             node = entry.find(tag)
@@ -191,13 +191,13 @@ def list_8k_filings(cik, count):
 
 
 def get_filing_documents(index_url):
-    """Return [(doc_type, url)] for the documents listed on a filing index page."""
+    """return [(doc_type, url)] for the documents listed on a filing index page."""
     soup = BeautifulSoup(http_get(index_url), "html.parser")
     table = soup.find("table", {"class": "tableFile"})
     docs = []
     if table is None:
         return docs
-    # Table columns: Seq | Description | Document (link) | Type | Size
+    # table columns: Seq | Description | Document (link) | Type | Size
     for row in table.find_all("tr")[1:]:
         cells = row.find_all("td")
         if len(cells) < 4 or not cells[2].find("a"):
@@ -213,7 +213,7 @@ def get_filing_documents(index_url):
 
 
 def html_to_text(html):
-    """Strip tags, scripts and XBRL headers; collapse whitespace."""
+    """strip tags, scripts and XBRL headers; collapse whitespace."""
     soup = BeautifulSoup(html, "html.parser")
     for tag in soup(["script", "style", "ix:header", "head"]):
         tag.decompose()
@@ -222,9 +222,9 @@ def html_to_text(html):
 
 
 def fetch_filing_text(filing):
-    """Download the press-release exhibits (EX-99.x); fall back to the 8-K body."""
+    """download the press-release exhibits (EX-99.x); fall back to the 8-K body."""
     docs = get_filing_documents(filing["index_url"])
-    # Press releases are attached as Exhibit 99.1, 99.2, ...; the 8-K form
+    # press releases are attached as Exhibit 99.1, 99.2, ...; the 8-K form
     # itself is mostly legal boilerplate, so it is only used as a fallback.
     exhibits = [url for typ, url in docs if typ.startswith("EX-99")]
     chosen = exhibits or [url for typ, url in docs if typ.startswith("8-K")][:1]
@@ -233,21 +233,21 @@ def fetch_filing_text(filing):
 
 
 # ---------------------------------------------------------------------------
-# Step 4: keep only passages that look like product announcements
+# step 4: keep only passages that look like product announcements
 # ---------------------------------------------------------------------------
 
 def select_launch_passages(text, budget=MAX_PROMPT_CHARS):
     """
-    Split the text into sentences and keep each keyword sentence plus its
+    split the text into sentences and keep each keyword sentence plus its
     neighbours. The headline (first ~600 chars) is always kept because press
     releases put the announcement there.
     """
-    # Rough sentence split: break after . ! or ? followed by a space.
+    # rough sentence split: break after . ! or ? followed by a space.
     sentences = re.split(r"(?<=[.!?])\s+", text)
     keep = set()
     for i, sentence in enumerate(sentences):
         if LAUNCH_KEYWORDS.search(sentence):
-            # The sentence before / after often names or describes the product.
+            # the sentence before / after often names or describes the product.
             keep.update({i - 1, i, i + 1})
     if not keep:
         return ""          # no launch words at all -> skip the LLM call
@@ -257,14 +257,14 @@ def select_launch_passages(text, budget=MAX_PROMPT_CHARS):
 
 
 # ---------------------------------------------------------------------------
-# Step 5: Named Entity Recognition
+# step 5: Named Entity Recognition
 # ---------------------------------------------------------------------------
 
 _nlp = None
 
 
 def load_ner_model():
-    """Load spaCy's English pipeline (python -m spacy download en_core_web_sm)."""
+    """load spaCy's English pipeline (python -m spacy download en_core_web_sm)."""
     global _nlp
     if _nlp is None:
         try:
@@ -278,11 +278,11 @@ def load_ner_model():
 
 
 def run_ner(text):
-    """Return (orgs, products): most frequent ORG and PRODUCT entities."""
+    """return (orgs, products): most frequent ORG and PRODUCT entities."""
     nlp = load_ner_model()
     if not nlp:
         return [], []
-    # Count how often each ORG / PRODUCT name appears; the most frequent ones
+    # count how often each ORG / PRODUCT name appears; the most frequent ones
     # are passed to the LLM as hints.
     counts = {"ORG": {}, "PRODUCT": {}}
     for ent in nlp(text).ents:
@@ -297,7 +297,7 @@ def run_ner(text):
 
 
 # ---------------------------------------------------------------------------
-# Step 6: query the local LLM through Ollama
+# step 6: query the local LLM through Ollama
 # ---------------------------------------------------------------------------
 
 SYSTEM_PROMPT = """You are a financial analyst performing named entity recognition
@@ -360,7 +360,7 @@ RESPONSE_SCHEMA = {
 
 
 def query_llm(model, user_prompt):
-    """Send one chat request to Ollama and return (parsed_json, seconds)."""
+    """send one chat request to Ollama and return (parsed_json, seconds)."""
     start = time.time()
     resp = requests.post(OLLAMA_URL, json={
         "model": model,
@@ -378,7 +378,7 @@ def query_llm(model, user_prompt):
         return {}, time.time() - start
 
 
-# Note: I also tried adding COMPANY and THIRD_PARTY categories here to catch
+# note: I also tried adding COMPANY and THIRD_PARTY categories here to catch
 # acquired companies and other firms' products. llama3.2 (3B) then labelled
 # many of the companies' own products as THIRD_PARTY, so those categories were
 # removed; such cases are handled in manual_exclusions.csv instead.
@@ -412,7 +412,7 @@ VERIFY_SCHEMA = {
 
 def verify_product(model, company, product, evidence=""):
     """
-    Second LLM pass: classify one candidate; only PRODUCT is kept.
+    second LLM pass: classify one candidate; only PRODUCT is kept.
     Newness is already enforced by the evidence check in validate_products,
     so this pass only asks what kind of thing the candidate is, which a small
     model answers far more reliably than "is this new?".
@@ -438,7 +438,7 @@ def verify_product(model, company, product, evidence=""):
 
 
 def build_prompt(company, ticker, passage, orgs, products):
-    """User prompt: filing metadata, NER hints and the selected passages."""
+    """user prompt: filing metadata, NER hints and the selected passages."""
     return (f"Filing company: {company} (ticker {ticker})\n"
             f"NER ORGANIZATION entities: {', '.join(orgs) or 'none'}\n"
             f"NER PRODUCT entities: {', '.join(products) or 'none'}\n\n"
@@ -447,11 +447,11 @@ def build_prompt(company, ticker, passage, orgs, products):
 
 
 # ---------------------------------------------------------------------------
-# Step 7: validation and cleaning
+# step 7: validation and cleaning
 # ---------------------------------------------------------------------------
 
 def clean_description(text, limit=MAX_DESCRIPTION_CHARS):
-    """Trim whitespace and cut at a word boundary so len(text) < limit."""
+    """trim whitespace and cut at a word boundary so len(text) < limit."""
     text = re.sub(r"\s+", " ", str(text or "")).strip().strip('"')
     if len(text) < limit:
         return text
@@ -469,12 +469,12 @@ def pretty_company(name):
 
 
 def normalise(s):
-    """Lower-case and keep only letters/digits, so 'Libre® 3' == 'libre 3'."""
+    """lower-case and keep only letters/digits, so 'Libre® 3' == 'libre 3'."""
     return re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
 
 
 def strip_symbols(text, source_text):
-    """Remove trademark marks; llama3.2 sometimes turns '®' into 'µ'."""
+    """remove trademark marks; llama3.2 sometimes turns '®' into 'µ'."""
     text = re.sub(r"[®™©]", "", text)
     if "µ" not in source_text:
         text = text.replace("µ", "")
@@ -482,12 +482,12 @@ def strip_symbols(text, source_text):
 
 
 def word_coverage(needle, haystack):
-    """Share of the words in `needle` that occur in the normalised haystack."""
+    """share of the words in `needle` that occur in the normalised haystack."""
     words = normalise(needle).split()
     return sum(w in haystack for w in words) / max(len(words), 1)
 
 
-# Names the model returns that are not products (securities, deals, generic
+# names the model returns that are not products (securities, deals, generic
 # phrases). Checked against whole words of the normalised name.
 NOT_PRODUCT_WORDS = re.compile(
     r"\b(shares|notes|debentures|dividend|transaction|acquisition|merger|"
@@ -497,7 +497,7 @@ NOT_PRODUCT_WORDS = re.compile(
 
 def validate_products(llm_json, source_text):
     """
-    Keep only grounded, specific products. A product is dropped when
+    keep only grounded, specific products. A product is dropped when
       - its name (or 75% of its words) does not occur in the filing,
       - the name is generic or describes a deal/security instead of a product,
       - the evidence sentence is not (mostly) copied from the filing, does not
@@ -516,18 +516,18 @@ def validate_products(llm_json, source_text):
         name = strip_symbols(str(item.get("new_product", "")), source_text)
         key = normalise(name)
 
-        # Check 1: skip empty/generic names, repeats and run-on sentences.
+        # check 1: skip empty/generic names, repeats and run-on sentences.
         if key in generic or key in seen or len(name) > 80:
             continue
-        # Check 2: skip names that are really deals, securities, etc.
+        # check 2: skip names that are really deals, securities, etc.
         if NOT_PRODUCT_WORDS.search(key):
             continue
-        # Check 3: the product name has to appear in the filing (catches
+        # check 3: the product name has to appear in the filing (catches
         # names the model made up).
         if key not in haystack and word_coverage(name, haystack) < 0.75:
             continue
 
-        # Check 4: the quoted evidence must come from the filing, mention the
+        # check 4: the quoted evidence must come from the filing, mention the
         # product, and use a launch word ("launched", "approved", ...).
         evidence = str(item.get("evidence", ""))
         if (word_coverage(evidence, haystack) < 0.8
@@ -535,7 +535,7 @@ def validate_products(llm_json, source_text):
                 or not LAUNCH_KEYWORDS.search(evidence)):
             continue
 
-        # Check 5: the description must add something beyond the name.
+        # check 5: the description must add something beyond the name.
         description = clean_description(
             strip_symbols(str(item.get("product_description", "")), source_text))
         if len(description) < 15 or normalise(description) in (key, "the " + key):
@@ -548,7 +548,7 @@ def validate_products(llm_json, source_text):
 
 
 # ---------------------------------------------------------------------------
-# Output files
+# output files
 # ---------------------------------------------------------------------------
 
 def append_csv(path, columns, row):
@@ -569,7 +569,7 @@ def read_csv(path):
 
 
 def write_pipe_table(csv_path, txt_path):
-    """Write the CSV as the ' | ' separated table the assignment shows."""
+    """write the CSV as the ' | ' separated table the assignment shows."""
     rows = read_csv(csv_path)
     headers = ["Company Name", "Stock Name", "Filing Time",
                "New Product", "Product Description"]
@@ -584,7 +584,7 @@ def write_pipe_table(csv_path, txt_path):
 
 
 # ---------------------------------------------------------------------------
-# Main loop
+# main loop
 # ---------------------------------------------------------------------------
 
 def parse_args():
@@ -607,7 +607,7 @@ def parse_args():
 
 def apply_manual_exclusions(out_csv):
     """
-    Remove rows listed in manual_exclusions.csv (stock_name, new_product,
+    remove rows listed in manual_exclusions.csv (stock_name, new_product,
     reason). These are errors found by reading the final CSV by hand that both
     LLM passes missed. Keeping them in a file makes every manual change
     visible and repeatable instead of editing the CSV directly.
@@ -640,7 +640,7 @@ def check_candidate(model, company, product):
 
 
 def verify_saved_rows(model, out_csv, rejected_csv):
-    """Run the second LLM pass over the CSV and rewrite it with the survivors."""
+    """run the second LLM pass over the CSV and rewrite it with the survivors."""
     kept = []
     for row in read_csv(out_csv):
         ok, reason = check_candidate(model, row["company_name"], row)
@@ -669,13 +669,13 @@ def main():
     if args.verify_existing and out_csv.exists():
         verify_saved_rows(args.model, out_csv, rejected_csv)
 
-    # Resume support: skip filings already processed in an earlier run.
+    # resume support: skip filings already processed in an earlier run.
     done = {row["accession"] for row in read_csv(log_csv)}
     saved = read_csv(out_csv)
     n_rows = len(saved)
     # A product is reported once per company: quarterly releases keep
     # mentioning the same launch, so repeats from other filings are dropped.
-    # Keyed on the SEC name so dual share classes (FOX / FOXA) count once.
+    # keyed on the SEC name so dual share classes (FOX / FOXA) count once.
     reported = {(r["company_name"], normalise(r["new_product"])) for r in saved}
 
     ticker_map = load_ticker_map()
@@ -683,7 +683,7 @@ def main():
     print(f"{len(tickers)} companies, model={args.model}, "
           f"{n_rows} rows already saved, {len(done)} filings already seen")
 
-    # Outer loop: one company at a time, until we have enough products.
+    # outer loop: one company at a time, until we have enough products.
     for ticker in tickers:
         if n_rows >= args.target_rows:
             break
@@ -699,13 +699,13 @@ def main():
             print(f"[{ticker}] feed error: {exc}")
             continue
 
-        # Inner loop: this company's 8-Ks, newest first. Every filing gets a
+        # inner loop: this company's 8-Ks, newest first. Every filing gets a
         # row in processing_log.csv saying what happened to it.
         sent_to_llm = 0
         for filing in filings:
             if sent_to_llm >= args.max_docs_per_company or n_rows >= args.target_rows:
                 break
-            # Skip filings done in an earlier run, and amendments (8-K/A).
+            # skip filings done in an earlier run, and amendments (8-K/A).
             if filing["accession"] in done or filing["form"] != "8-K":
                 continue
             log = {"ticker": ticker, "company_name": company,
@@ -715,7 +715,7 @@ def main():
                    "n_products": 0, "ner_orgs": "", "ner_products": "",
                    "llm_seconds": ""}
 
-            # Filter 1 (free): only 8-Ks that usually contain a press release.
+            # filter 1 (free): only 8-Ks that usually contain a press release.
             if not any(item in filing["items"] for item in RELEVANT_ITEMS):
                 log["status"] = "skipped_items"
                 append_csv(log_csv, LOG_COLUMNS, log)
@@ -728,7 +728,7 @@ def main():
                 append_csv(log_csv, LOG_COLUMNS, log)
                 continue
 
-            # Filter 2 (free): the text must contain at least one launch word.
+            # filter 2 (free): the text must contain at least one launch word.
             passage = select_launch_passages(text)
             if not passage:
                 log["status"] = "no_launch_keywords"
@@ -751,7 +751,7 @@ def main():
                 sys.exit(f"Ollama request failed ({exc}). Is `ollama serve` running "
                          f"and `ollama pull {args.model}` done?")
             except requests.RequestException as exc:
-                # One bad filing should not stop the run; log it and move on.
+                # one bad filing should not stop the run; log it and move on.
                 log["status"] = f"llm_error: {exc}"
                 append_csv(log_csv, LOG_COLUMNS, log)
                 print(f"[{ticker}] {filing['filing_date']} LLM error, skipped", flush=True)
@@ -759,10 +759,10 @@ def main():
             sent_to_llm += 1
             log["llm_seconds"] = f"{seconds:.1f}"
 
-            # Rule checks on the answer, and drop products we already have.
+            # rule checks on the answer, and drop products we already have.
             candidates = [p for p in validate_products(answer, text)
                           if (company, normalise(p["new_product"])) not in reported]
-            # Stage 2: a short second LLM call classifies each candidate;
+            # stage 2: a short second LLM call classifies each candidate;
             # anything that is not a PRODUCT goes to rejected_candidates.csv.
             products = []
             for product in candidates:
@@ -780,7 +780,7 @@ def main():
             log["status"] = "product_found" if products else "no_product"
             append_csv(log_csv, LOG_COLUMNS, log)
 
-            # Save the accepted products right away, so nothing is lost if the
+            # save the accepted products right away, so nothing is lost if the
             # run is stopped.
             for product in products:
                 append_csv(out_csv, CSV_COLUMNS, {
@@ -795,7 +795,7 @@ def main():
             print(f"[{ticker}] {filing['filing_date']} items={filing['items']!r} "
                   f"{seconds:.0f}s -> {names}   (total rows {n_rows})", flush=True)
 
-    # Last step: drop the rows flagged during manual review, then write the
+    # last step: drop the rows flagged during manual review, then write the
     # " | " separated version of the table.
     removed = apply_manual_exclusions(out_csv)
     if removed:

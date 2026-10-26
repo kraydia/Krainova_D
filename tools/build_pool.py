@@ -1,7 +1,8 @@
 """
-One-off helper used once while building the final dataset (see report §6).
+one-off helper used once while building the final dataset (see "Problems I
+ran into" in the report).
 
-An earlier version of the second LLM pass rejected almost every candidate.
+an earlier version of the second LLM pass rejected almost every candidate.
 Its rejects were logged, so this script merges every first-stage candidate
 (kept + rejected) back into output/new_products.csv. The fixed category
 verifier is then re-applied with:
