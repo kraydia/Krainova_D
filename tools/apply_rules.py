@@ -1,12 +1,12 @@
 """
 one-off helper: apply the name rules and company-level de-duplication that
-were added to extract_8k_products.py last to the rows already saved, then
+were added to Krainova_Assignment_2.py last to the rows already saved, then
 rewrite output/new_products.txt.
 """
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import extract_8k_products as e
+import Krainova_Assignment_2 as e
 
 out = e.OUTPUT_DIR / "new_products.csv"
 rows, seen, dropped = [], set(), []

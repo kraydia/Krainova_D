@@ -9,7 +9,7 @@ and save them in a CSV with five columns: company name, ticker, filing date,
 product name and a short description (under 180 characters). For "Filing
 Time" I used the SEC filing date (YYYY-MM-DD), the same format as the example
 in the assignment, rather than the exact time of day. My final file,
-`output/new_products.csv`, has **189 products from 83 S&P 500 companies**.
+`output/new_products.csv`, has **188 products from 82 S&P 500 companies**.
 To get there, the program looked at **4,930 8-K filings from 495 companies**,
 filed between November 2023 and October 2026.
 
@@ -67,14 +67,14 @@ the product name. Each product is only counted once per company.
 | Products that passed my checks | 281 |
 | Removed by the LLM checking step | 53 |
 | Removed by name rules / duplicates | 7 |
-| Removed by my manual review | 32 |
-| **Final products** | **189** |
+| Removed by my manual review | 33 |
+| **Final products** | **188** |
 
 Each extraction call took about 15 seconds, so all the LLM work added up to
 about 12 hours on my laptop. I ran it in several sessions, and the script
 picks up where it stopped.
 
-**Manual review:** I read every row of the final file. I removed 32 that were
+**Manual review:** I read every row of the final file. I removed 33 that were
 clearly wrong, such as an acquired company (Ecolab's "CoolIT Systems"), a
 spin-off ("FedEx Freight"), another company's AI model (Dell's "DeepSeek"),
 existing products (Intel vPro), and drugs or devices that were only in
@@ -84,6 +84,16 @@ original filing text. I didn't edit the CSV by hand. Each removed
 row is listed with its reason in `manual_exclusions.csv`, and the script
 applies that list at the end. A few remaining rows are borderline, for
 example a newly approved use for an existing drug.
+
+**Fixing weak descriptions:** 42 descriptions were too short (like "a new
+MacBook model"), talked about sales instead of the product, or were the same
+for two products. `tools/fix_descriptions.py` sends the filing sentences that
+mention each of these products back to the LLM and asks for a better
+description. I read every rewrite and kept the old text for 6 where the new
+one wasn't better. One description (the Ensure shake) I wrote by hand, because
+the filing lists several launches in one long sentence and the model kept
+mixing it up with the infant formula next to it. The script also removes
+leftover "TM" marks from product names.
 
 ## Problems I ran into
 
@@ -120,7 +130,7 @@ example a newly approved use for an existing drug.
 
 ## Files
 
-`extract_8k_products.py` (the program), `output/new_products.csv` (results),
+`Krainova_Assignment_2.py` (the program), `output/new_products.csv` (results),
 `output/new_products.txt` (same table with `|`), `output/processing_log.csv`
 (every filing and what happened to it), `output/rejected_candidates.csv`
 (products the LLM check removed), `manual_exclusions.csv` (rows I removed by

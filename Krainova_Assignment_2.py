@@ -1,6 +1,6 @@
 """
-extract_8k_products.py
-======================
+Krainova_Assignment_2.py
+========================
 
 extract new product announcements from SEC Form 8-K filings with a local LLM.
 
@@ -30,7 +30,7 @@ outputs:
 usage:
     set SEC_USER_AGENT=Your Name your.email@example.com
     ollama pull llama3.2
-    python extract_8k_products.py --target-rows 100
+    python Krainova_Assignment_2.py --target-rows 100
 
 the run can be stopped and restarted: filings already in the log are skipped.
 """
@@ -476,6 +476,8 @@ def normalise(s):
 def strip_symbols(text, source_text):
     """remove trademark marks; llama3.2 sometimes turns '®' into 'µ'."""
     text = re.sub(r"[®™©]", "", text)
+    # some filings write the trademark sign as a separate "TM" word
+    text = re.sub(r"\s+TM\b", "", text)
     if "µ" not in source_text:
         text = text.replace("µ", "")
     return re.sub(r"\s+", " ", text).strip()

@@ -6,8 +6,9 @@ LLaMA 3.2 model (via Ollama) to return the new products as structured JSON.
 Answers are checked against the filing text, and a second LLM pass keeps only
 candidates it classifies as products (not deals, programs or facilities).
 
-Result: **189 new products from 83 companies**, from 4,930 filings examined
-(32 rows removed by manual review are listed in `manual_exclusions.csv`).
+Result: **188 new products from 82 companies**, from 4,930 filings examined
+(33 rows removed by manual review are listed in `manual_exclusions.csv`;
+weak descriptions were rewritten with `tools/fix_descriptions.py`).
 See [report.md](report.md) for the methodology.
 
 ## Output
@@ -18,7 +19,8 @@ See [report.md](report.md) for the methodology.
 | `output/new_products.txt` | the same table, values separated by ` \| ` |
 | `output/processing_log.csv` | every filing examined, its status, NER entities and LLM time |
 | `output/rejected_candidates.csv` | candidates dropped by the verification pass, with the model's reason |
-| `tools/` | one-off helpers used to re-verify and clean the saved rows |
+| `manual_exclusions.csv` | rows removed on manual review, with reasons (applied automatically) |
+| `tools/` | one-off helpers used to re-verify, clean and re-describe the saved rows |
 | `report.md` | methodology report |
 
 ## Run it
@@ -28,7 +30,7 @@ pip install -r requirements.txt
 python -m spacy download en_core_web_sm
 ollama pull llama3.2
 set SEC_USER_AGENT=Your Name your.email@example.com
-python extract_8k_products.py --target-rows 100
+python Krainova_Assignment_2.py --target-rows 100
 ```
 
 Options: `--model` (any Ollama model, e.g. `llama3.1:8b`), `--tickers AAPL NVDA`

@@ -6,12 +6,12 @@ an earlier version of the second LLM pass rejected almost every candidate.
 Its rejects were logged, so this script merges every first-stage candidate
 (kept + rejected) back into output/new_products.csv. The fixed category
 verifier is then re-applied with:
-    python extract_8k_products.py --verify-existing --target-rows 0
+    python Krainova_Assignment_2.py --verify-existing --target-rows 0
 """
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import extract_8k_products as e
+import Krainova_Assignment_2 as e
 
 out = e.OUTPUT_DIR / "new_products.csv"
 names = {k: e.pretty_company(v[1]) for k, v in e.load_ticker_map().items()}
