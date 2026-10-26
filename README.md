@@ -6,8 +6,8 @@ LLaMA 3.2 model (via Ollama) to return the new products as structured JSON.
 Answers are checked against the filing text, and a second LLM pass keeps only
 candidates it classifies as products (not deals, programs or facilities).
 
-Result: **196 new products from 84 companies**, from 4,930 filings examined
-(25 rows removed by manual review are listed in `manual_exclusions.csv`).
+Result: **189 new products from 83 companies**, from 4,930 filings examined
+(32 rows removed by manual review are listed in `manual_exclusions.csv`).
 See [report.md](report.md) for the methodology.
 
 ## Output
